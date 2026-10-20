@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -58,15 +59,37 @@ async def setup_bot(bot: Bot) -> None:
     )
 
 
+async def ensure_webhook(bot: Bot, redis: Redis, allowed_updates: list[str]) -> None:
+    """Ставит webhook и кнопку меню ровно одной репликой.
+
+    Если N реплик стартуют разом и все зовут setWebhook, Telegram отвечает flood control
+    и реплики падают. Поэтому: webhook уже настроен с этой конфигурацией → ничего не делаем;
+    иначе ставит только реплика, взявшая замок в Redis. Секрет getWebhookInfo не отдаёт,
+    поэтому факт «настроено с этим секретом» хранится маркером с хэшем конфигурации.
+    """
+    url = f"{settings.webhook_base_url.rstrip('/')}{WEBHOOK_PATH}"
+    config = f"{url}|{settings.webhook_secret}|{','.join(sorted(allowed_updates))}|{settings.webapp_url}"
+    marker = f"tg:webhook:{hashlib.sha256(config.encode()).hexdigest()[:16]}"
+
+    info = await bot.get_webhook_info()
+    if info.url == url and await redis.exists(marker):
+        log.info("webhook already set")
+        return
+    if not await redis.set("tg:webhook:lock", 1, nx=True, ex=30):
+        log.info("webhook is being set by another replica")
+        return
+    try:
+        await bot.set_webhook(url, secret_token=settings.webhook_secret, allowed_updates=allowed_updates)
+        await setup_bot(bot)
+        await redis.set(marker, 1)
+        log.info("webhook set to %s", url)
+    finally:
+        await redis.delete("tg:webhook:lock")
+
+
 async def run_webhook() -> None:
     bot, dp, redis = build()
-    # Каждая реплика при старте ставит один и тот же webhook — операция идемпотентна.
-    await bot.set_webhook(
-        f"{settings.webhook_base_url.rstrip('/')}{WEBHOOK_PATH}",
-        secret_token=settings.webhook_secret,
-        allowed_updates=dp.resolve_used_update_types(),
-    )
-    await setup_bot(bot)
+    await ensure_webhook(bot, redis, dp.resolve_used_update_types())
 
     app = web.Application()
     SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=settings.webhook_secret).register(app, WEBHOOK_PATH)

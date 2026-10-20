@@ -1,6 +1,7 @@
 import Script from 'next/script'
 import type { ReactNode } from 'react'
 import { TelegramInit } from './telegram-init'
+import './globals.css'
 
 export const metadata = { title: 'Каталог' }
 

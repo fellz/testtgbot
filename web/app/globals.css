@@ -1,0 +1,74 @@
+/* Цвета берутся из темы Telegram (telegram-web-app.js выставляет --tg-theme-*),
+   вне Telegram — из системной темы браузера. */
+:root {
+  --bg: var(--tg-theme-bg-color, #ffffff);
+  --text: var(--tg-theme-text-color, #111111);
+  --hint: var(--tg-theme-hint-color, #8a8a8e);
+  --card: var(--tg-theme-secondary-bg-color, #f2f2f5);
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: var(--tg-theme-bg-color, #17212b);
+    --text: var(--tg-theme-text-color, #f5f5f5);
+    --hint: var(--tg-theme-hint-color, #8b9aa7);
+    --card: var(--tg-theme-secondary-bg-color, #232e3c);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 {
+  margin: 4px 0 16px;
+  font-size: 28px;
+}
+
+.empty {
+  color: var(--hint);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.card .name {
+  padding: 8px 10px 10px;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}

@@ -21,15 +21,15 @@ export default async function CatalogPage() {
     <main>
       <h1>Каталог</h1>
       {products === null ? (
-        <p>Каталог временно недоступен.</p>
+        <p className="empty">Каталог временно недоступен.</p>
       ) : products.length === 0 ? (
-        <p>Товаров пока нет.</p>
+        <p className="empty">Товаров пока нет.</p>
       ) : (
-        <ul>
+        <ul className="grid">
           {products.map((p) => (
-            <li key={p.id} data-testid="product">
-              <img src={p.image_url} alt={p.name} width={160} />
-              <div>{p.name}</div>
+            <li key={p.id} className="card" data-testid="product">
+              <img src={p.image_url} alt={p.name} />
+              <div className="name">{p.name}</div>
             </li>
           ))}
         </ul>
