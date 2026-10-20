@@ -1,10 +1,11 @@
 import asyncio
 import socket
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
@@ -19,7 +20,7 @@ HOSTNAME = socket.gethostname()
 
 
 @app.middleware("http")
-async def instance_header(request, call_next):
+async def instance_header(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
     # Какая реплика ответила — видно в проверке отказоустойчивости.
     response = await call_next(request)
     response.headers["X-Instance"] = HOSTNAME
@@ -46,14 +47,14 @@ def require_internal(x_internal_token: Annotated[str | None, Header()] = None) -
 
 
 @app.get("/health")
-async def health(session: Annotated[AsyncSession, Depends(get_session)]):
+async def health(session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, bool]:
     await session.execute(text("select 1"))
     await asyncio.to_thread(storage.ping)
     return {"ok": True}
 
 
 @app.get("/products", response_model=list[ProductOut])
-async def list_products(session: Annotated[AsyncSession, Depends(get_session)]):
+async def list_products(session: Annotated[AsyncSession, Depends(get_session)]) -> list[ProductOut]:
     rows = await session.scalars(select(Product).order_by(Product.created_at.desc(), Product.id.desc()))
     return [ProductOut.of(p) for p in rows]
 
@@ -64,13 +65,14 @@ async def create_product(
     name: Annotated[str, Form(min_length=1, max_length=200)],
     image: Annotated[UploadFile, File()],
     idempotency_key: Annotated[str | None, Form(max_length=100)] = None,
-):
+) -> ProductOut:
     name = name.strip()
     if not name:
         raise HTTPException(422, "name is empty")
-    ext = EXTENSIONS.get(image.content_type or "")
+    content_type = image.content_type or ""
+    ext = EXTENSIONS.get(content_type)
     if ext is None:
-        raise HTTPException(415, f"unsupported image type: {image.content_type}")
+        raise HTTPException(415, f"unsupported image type: {content_type}")
 
     if idempotency_key:
         existing = await session.scalar(select(Product).where(Product.idempotency_key == idempotency_key))
@@ -82,7 +84,7 @@ async def create_product(
         raise HTTPException(413, "image too large")
 
     key = f"{uuid.uuid4().hex}.{ext}"
-    await storage.put_image(key, data, image.content_type)
+    await storage.put_image(key, data, content_type)
 
     # Гонка двух реплик с одним ключом решается уникальным индексом: проигравший
     # получает DO NOTHING и отдаёт запись победителя (его объект в S3 — сирота, не беда).
@@ -98,4 +100,6 @@ async def create_product(
         product = await session.scalar(select(Product).where(Product.idempotency_key == idempotency_key))
     else:
         product = await session.get(Product, new_id)
+    if product is None:  # не бывает: строка либо вставлена, либо уже была
+        raise HTTPException(500, "product vanished after insert")
     return ProductOut.of(product)

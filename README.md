@@ -75,8 +75,12 @@ cp .env.example .env      # заполнить BOT_TOKEN, ADMIN_IDS, секре�
 
 ## Проверка
 
+Типы: Python-код api и bot проверяется pyright в strict-режиме (`pyrightconfig.json`).
+
 ```bash
-NODE_PATH="$(npm root -g)" node e2e/check.mjs
+uv venv --python 3.13 .venv && uv pip install --python .venv -r api/requirements.txt -r bot/requirements.txt
+uvx pyright                                   # 0 errors
+NODE_PATH="$(npm root -g)" node e2e/check.mjs # e2e против запущенного стека
 ```
 
 Сценарий проверяет:

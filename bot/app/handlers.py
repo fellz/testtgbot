@@ -89,6 +89,8 @@ async def save_product(message: Message, state: FSMContext, bot: Bot) -> None:
         await message.answer("Название длиннее 200 символов — сократите, пожалуйста.")
         return
 
+    if not message.photo:
+        return
     photo = message.photo[-1]  # самый большой размер
     buf = io.BytesIO()
     await bot.download(photo, destination=buf)
@@ -100,7 +102,7 @@ async def save_product(message: Message, state: FSMContext, bot: Bot) -> None:
         return
 
     await state.clear()
-    await message.answer(f"Товар «{product['name']}» добавлен (#{product['id']}).", reply_markup=admin_kb())
+    await message.answer(f"Товар «{product.name}» добавлен (#{product.id}).", reply_markup=admin_kb())
     await message.answer("Каталог:", reply_markup=catalog_kb())
 
 

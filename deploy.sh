@@ -11,7 +11,7 @@ DIR=apps/testtgbot
 
 ssh "$HOST" "mkdir -p $DIR"
 rsync -az --delete \
-  --exclude .git --exclude .env --exclude var --exclude node_modules --exclude .next \
+  --exclude .git --exclude .env --exclude .venv --exclude var --exclude node_modules --exclude .next \
   --exclude __pycache__ --exclude 'e2e/*.png' \
   "$ROOT/" "$HOST:$DIR/"
 ssh "$HOST" "cd $DIR && test -f .env || { echo '✗ нет $DIR/.env на сервере — заполни по .env.example'; exit 1; }

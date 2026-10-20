@@ -1,6 +1,7 @@
-from pydantic_settings import BaseSettings, NoDecode
-from pydantic import field_validator
 from typing import Annotated
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode
 
 
 class Settings(BaseSettings):
@@ -21,10 +22,11 @@ class Settings(BaseSettings):
 
     @field_validator("admin_ids", mode="before")
     @classmethod
-    def split_ids(cls, v):
+    def split_ids(cls, v: object) -> object:
         if isinstance(v, str):
             return frozenset(int(x) for x in v.replace(" ", "").split(",") if x)
         return v
 
 
-settings = Settings()
+# Обязательные поля (bot_token) приходят из окружения — pyright этого не видит.
+settings = Settings()  # pyright: ignore[reportCallIssue]

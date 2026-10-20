@@ -1,0 +1,12 @@
+{
+  "include": ["api", "bot"],
+  "exclude": ["**/.venv", "**/__pycache__"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "strict",
+  "executionEnvironments": [
+    { "root": "api" },
+    { "root": "bot" }
+  ]
+}

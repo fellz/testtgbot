@@ -1,4 +1,5 @@
 import aiohttp
+from pydantic import BaseModel
 
 from .config import settings
 
@@ -7,7 +8,13 @@ class ApiError(Exception):
     pass
 
 
-async def create_product(name: str, image: bytes, idempotency_key: str) -> dict:
+class Product(BaseModel):
+    id: int
+    name: str
+    image_url: str
+
+
+async def create_product(name: str, image: bytes, idempotency_key: str) -> Product:
     form = aiohttp.FormData()
     form.add_field("name", name)
     form.add_field("idempotency_key", idempotency_key)
@@ -18,4 +25,4 @@ async def create_product(name: str, image: bytes, idempotency_key: str) -> dict:
         ) as r:
             if r.status >= 400:
                 raise ApiError(f"{r.status}: {await r.text()}")
-            return await r.json()
+            return Product.model_validate(await r.json())

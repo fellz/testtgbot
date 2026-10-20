@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 from sqlalchemy import DateTime, String, func
@@ -26,7 +27,7 @@ class Product(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-async def get_session():
+async def get_session() -> AsyncIterator[AsyncSession]:
     async with Session() as session:
         yield session
 
