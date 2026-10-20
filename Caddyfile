@@ -1,0 +1,50 @@
+# Балансировщик перед репликами. Апстримы — по DNS-имени сервиса compose
+# (dynamic a): docker отдаёт IP всех живых реплик, Caddy перечитывает их раз в секунду,
+# так что `--scale` и падение реплики подхватываются без рестарта lb.
+# Упавшая реплика: lb_try_duration повторяет запрос на другой, fail_duration выводит её из ротации.
+{
+	admin off
+	auto_https off
+}
+
+(upstream) {
+	lb_policy round_robin
+	lb_try_duration 10s
+	lb_try_interval 250ms
+	fail_duration 10s
+}
+
+:80 {
+	handle_path /api/* {
+		reverse_proxy {
+			dynamic a api 8000 {
+				refresh 1s
+			}
+			import upstream
+		}
+	}
+
+	# Картинки товаров из MinIO (бакет products с публичным чтением).
+	handle_path /media/* {
+		rewrite * /products{uri}
+		reverse_proxy minio:9000
+	}
+
+	handle /tg/* {
+		reverse_proxy {
+			dynamic a bot 8080 {
+				refresh 1s
+			}
+			import upstream
+		}
+	}
+
+	handle {
+		reverse_proxy {
+			dynamic a web 3000 {
+				refresh 1s
+			}
+			import upstream
+		}
+	}
+}

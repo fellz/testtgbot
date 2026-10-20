@@ -1,0 +1,101 @@
+# Всё приложение: балансировщик + stateless-сервисы в N репликах + хранилища.
+# Наружу смотрит только lb (127.0.0.1:${LB_PORT}); TLS снаружи — nginx хоста.
+name: testtgbot
+
+x-api-env: &api-env
+  DATABASE_URL: postgresql+asyncpg://shop:${POSTGRES_PASSWORD:-shop}@postgres:5432/shop
+  S3_ENDPOINT: minio:9000
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio-secret}
+  S3_BUCKET: products
+  INTERNAL_TOKEN: ${INTERNAL_TOKEN:-change-me}
+
+services:
+  lb:
+    image: mirror.gcr.io/library/caddy:2
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "127.0.0.1:${LB_PORT:-5218}:80"
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    environment: *api-env
+    deploy:
+      replicas: ${API_REPLICAS:-2}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # Одноразовый шаг: миграции + бакет. Реплики api стартуют только после него.
+  migrate:
+    build: ./api
+    command: ["python", "-m", "app.init"]
+    environment: *api-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+    restart: "no"
+
+  web:
+    build: ./web
+    environment:
+      API_INTERNAL_URL: http://lb/api
+    deploy:
+      replicas: ${WEB_REPLICAS:-2}
+    restart: unless-stopped
+
+  bot:
+    build: ./bot
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      ADMIN_IDS: ${ADMIN_IDS:-}
+      REDIS_URL: redis://redis:6379/0
+      API_URL: http://lb/api
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-change-me}
+      WEBAPP_URL: ${WEBAPP_URL:-}
+      WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-change-me-too}
+    deploy:
+      replicas: ${BOT_REPLICAS:-2}
+    depends_on:
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  postgres:
+    image: mirror.gcr.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shop}
+      POSTGRES_DB: shop
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+      interval: 2s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: mirror.gcr.io/library/redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+    restart: unless-stopped
+
+  minio:
+    image: mirror.gcr.io/minio/minio:latest
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio-secret}
+    volumes: [miniodata:/data]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
